@@ -7,13 +7,13 @@ import gym
 import gym_sokoban
 import pandas as pd
 import numpy as np
-from thinker.actor_net import DRCNet
+from thinker.actor_net import DRCNet, ResNet
 from train_conv_probe import ConvProbe
 import os
 from thinker.actor_net import sample
 from thinker.util import EnvOut
 from typing import Optional
-from run_agent_interv_exps import ProbeIntervDRCNet
+from run_agent_interv_exps import ProbeIntervDRCNet, ProbeIntervResNet
 import argparse
 
 paths_3intervs = [
@@ -204,6 +204,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_ticks", type=int, default=3, help="number of internal ticks the agent performs (DRC only)")
     parser.add_argument("--num_episodes", type=int, default=200, help="number of Box-Shortcut episodes to intervene in")
     parser.add_argument("--noshortrouteinterv", action="store_true", help="flag to not perform short route intervention")
+    parser.add_argument('--resnet', action='store_true')
     args = parser.parse_args()
 
 
@@ -230,8 +231,8 @@ if __name__ == "__main__":
             probe.to(device)
 
         for layer in range(args.num_layers*2):
-            for interv, (olds, new_rs, new_ls, new_ds, new_us, checks, boxchecks) in box_exp_paths:
-                for alpha in [0.25,0.5,1,2,4]:
+            for interv, (olds, new_rs, new_ls, new_ds, new_us, checks, boxchecks) in box_exp_paths[1:2]:
+                for alpha in [0.25,0.5,1,2,4][-1:]:
                     alpha_t = alpha
                     if layer >= args.num_layers:
                         alpha *= dloc_probes[layer%args.num_layers].conv.weight.norm() / dloc_probes[layer].conv.weight.norm()
@@ -254,21 +255,33 @@ if __name__ == "__main__":
                                     mini_unqbox=False         
                                 ) 
                         if j == 0 and layer == 0 and seed == 0:
-                            drc_net = DRCNet(
-                                            obs_space=env.observation_space,
-                                            action_space=env.action_space,
-                                            flags=flags,
-                                            record_state=True,
-                                            num_layers=args.num_layers,
-                                            num_ticks=args.num_ticks
-                                            )
+                            if not args.resnet:
+                                net = DRCNet(
+                                                obs_space=env.observation_space,
+                                                action_space=env.action_space,
+                                                flags=flags,
+                                                record_state=True,
+                                                num_layers=args.num_layers,
+                                                num_ticks=args.num_ticks
+                                                )
+                                patch_net = ProbeIntervDRCNet(net, debug=False)
+                            else:
+                                net = ResNet(
+                                    obs_space=env.observation_space,
+                                    action_space=env.action_space,
+                                    flags=flags,
+                                    record_state=True,
+                                    num_layers=args.num_layers
+                                    )
+                                patch_net = ProbeIntervResNet(net, debug=False)
                             ckp_path = "../../checkpoints/sokoban"
                             ckp_path = os.path.join(util.full_path(ckp_path), f"ckp_actor_realstep{args.model_name}.tar")
                             ckp = torch.load(ckp_path, map_location=torch.device('cpu'))
-                            drc_net.load_state_dict(ckp["actor_net_state_dict"], strict=False)
-                            patch_net = ProbeIntervDRCNet(drc_net)
+                            net.load_state_dict(ckp["actor_net_state_dict"], strict=False)
+                            net.eval()
+                            
 
-                        rnn_state = drc_net.initial_state(batch_size=1, device=env.device)
+                        rnn_state = net.initial_state(batch_size=1, device=env.device)
                         state = env.reset()
                         env_out = util.init_env_out(state, flags, dim_actions=1, tuple_action=False)
 
@@ -341,4 +354,4 @@ if __name__ == "__main__":
             os.mkdir("./results")
         if not os.path.exists("./results/interv_results"):
             os.mkdir("./results/interv_results")
-        pd.DataFrame(results).to_csv(f"interv_results/boxinterv"+ ("" if not args.noshortrouteinterv else "_noshortrouteinterv") +f"_{args.model_name}_seed{seed}.csv")
+        pd.DataFrame(results).to_csv(f"./results/interv_results/boxinterv"+ ("" if not args.noshortrouteinterv else "_noshortrouteinterv") +f"_{args.model_name}_seed{seed}.csv")

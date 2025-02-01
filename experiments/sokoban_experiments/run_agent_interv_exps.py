@@ -7,7 +7,7 @@ import gym
 import gym_sokoban
 import pandas as pd
 import numpy as np
-from thinker.actor_net import DRCNet
+from thinker.actor_net import DRCNet, ResNet
 from train_conv_probe import ConvProbe
 import os
 from thinker.actor_net import sample
@@ -167,13 +167,65 @@ class ProbeIntervDRCNet:
                 print(f"patching in at cell")
             locs = interv_dict["locs"]
             alpha = interv_dict["alpha"]
-            for (y, x) in locs:
+            for (y_idx, x_idx) in locs:
                 if self.debug:
-                    print(f"patching in at loc {y=}, {x=}")
-                c_next[0,:,y,x] += alpha*vec
+                    print(f"patching in at loc {y_idx=}, {x_idx=}")
+                c_next[0,:,y_idx , x_idx] += alpha*vec
 
         h_next = o * torch.tanh(c_next)
         return h_next, c_next
+    
+    
+class ProbeIntervResNet:
+    """
+    Wrapper around ResNet for probe interventions.
+    """
+
+    def __init__(self, res_net, debug=False):
+        self.res_net = res_net
+        self.debug= debug
+
+    def forward_normal(self, env_out, rnn_state):
+        return self.res_net(env_out, rnn_state)
+    
+    def forward_patch(self, env_out: EnvOut, rnn_state: tuple, greedy: bool = True,
+                      activ_ticks: Optional[list] = None,
+                      patch_info: Optional[dict] = None):
+    
+        done = env_out.done
+        T, B = done.shape
+        x = self.res_net.normalize(env_out.real_states.float())
+        x = torch.flatten(x, 0, 1)
+        x = self.res_net.encoder(x)
+        
+        for n, layer in enumerate(self.res_net.core):
+            x = layer(x)
+            if n in patch_info.keys():
+                if self.debug:
+                    print(f"patching in at layer {n=}")
+                for interv_dict in patch_info[n]:
+                    vec = interv_dict["vec"]
+                    locs = interv_dict["locs"]
+                    alpha = interv_dict["alpha"]
+                    for (y_idx, x_idx) in locs:
+                        if self.debug:
+                            print(f"patching in at loc {y_idx=}, {x_idx=}")
+                        x[0,:,y_idx, x_idx] += alpha*vec
+
+        core_output = torch.flatten(x, 1)
+        final_out = torch.nn.functional.relu(self.res_net.final_layer(core_output))
+        
+        
+        value = self.res_net.baseline(final_out)
+        pri_logits = self.res_net.policy(final_out)
+        pri_logits = pri_logits.view(T*B, self.res_net.dim_actions, self.res_net.num_actions)
+        pri_probs = torch.nn.functional.softmax(pri_logits.view(-1), dim=0)
+        pri = sample(pri_logits, greedy=greedy, dim=-1)
+        pri = pri.view(T, B, self.res_net.dim_actions) 
+        pri_env = pri[-1, :, 0] if not self.res_net.tuple_action else pri[-1]   
+        action = pri_env
+        return (action, pri_probs, pri_logits.view(-1), (), value)
+    
     
 paths_3intervs = [
     ([(2,1), (2,0), (3,0)], [(5,1), (5,2), (5,3)], [], [], [], [(2,1)]),
@@ -357,6 +409,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_ticks", type=int, default=3, help="number of internal ticks the agent performs (DRC only)")
     parser.add_argument("--num_episodes", type=int, default=200, help="number of Agent-Shortcut episodes to intervene in")
     parser.add_argument("--noshortrouteinterv", action="store_true", help="flag to not perform short route intervention")
+    parser.add_argument('--resnet', action='store_true')
     args = parser.parse_args()
 
     flags = util.create_setting(args=[], save_flags=False, wrapper_type=1) 
@@ -382,12 +435,12 @@ if __name__ == "__main__":
             probe.to(device)
 
         for layer in range(args.num_layers*2):
-            for alpha in [0.25,0.5,1,2,4]:
+            for alpha in [0.25,0.5,1,2,4][-1:]:
                 alpha_t = alpha
                 if layer >= args.num_layers:
                     alpha *= dloc_probes[layer%args.num_layers].conv.weight.norm() / dloc_probes[layer].conv.weight.norm()
 
-                for interv, (olds, new_rs, new_ls, new_ds, new_us, checks) in agent_exp_paths:
+                for interv, (olds, new_rs, new_ls, new_ds, new_us, checks) in agent_exp_paths[-1:]:
                     print(f"========================================= {layer=}, {alpha=}, {interv=}, {seed=}==================================")
                     successes = 0
                     for j in range(args.num_episodes):
@@ -405,22 +458,34 @@ if __name__ == "__main__":
                                     mini_unqbox=False         
                                 ) 
                         if j == 0 and layer == 0 and seed == 0:
-                            drc_net = DRCNet(
-                                            obs_space=env.observation_space,
-                                            action_space=env.action_space,
-                                            flags=flags,
-                                            record_state=True,
-                                            num_layers=args.num_layers,
-                                            num_ticks=args.num_ticks
-                                            )
+                            if not args.resnet:
+                                net = DRCNet(
+                                                obs_space=env.observation_space,
+                                                action_space=env.action_space,
+                                                flags=flags,
+                                                record_state=True,
+                                                num_layers=args.num_layers,
+                                                num_ticks=args.num_ticks
+                                                )
+                                patch_net = ProbeIntervDRCNet(net, debug=False)
+                            else:
+                                net = ResNet(
+                                    obs_space=env.observation_space,
+                                    action_space=env.action_space,
+                                    flags=flags,
+                                    record_state=True,
+                                    num_layers=args.num_layers
+                                    )
+                                patch_net = ProbeIntervResNet(net, debug=False)
                             ckp_path = "../../checkpoints/sokoban"
                             ckp_path = os.path.join(util.full_path(ckp_path), f"ckp_actor_realstep{args.model_name}.tar")
                             ckp = torch.load(ckp_path, map_location=torch.device('cpu'))
-                            drc_net.load_state_dict(ckp["actor_net_state_dict"], strict=False)
-                            drc_net.to(env.device)
-                            patch_net = ProbeIntervDRCNet(drc_net)
-
-                        rnn_state = drc_net.initial_state(batch_size=1, device=env.device)
+                            net.load_state_dict(ckp["actor_net_state_dict"], strict=False)
+                            net.to(env.device)
+                            net.eval()
+                            
+                     
+                        rnn_state = net.initial_state(batch_size=1, device=env.device)
                         state = env.reset()
                         env_out = util.init_env_out(state, flags, dim_actions=1, tuple_action=False)
 
@@ -466,7 +531,6 @@ if __name__ == "__main__":
                                 patch_old = False
                             elif (agent_y, agent_x) in checks[j]:
                                 fail = True
-
                             if patch_old:
                                 patch_info = {layer % args.num_layers: [{"vec": dloc_probes[layer].conv.weight[0].view(32), "locs": olds[j], "alpha": alpha if not args.noshortrouteinterv else 0},
                                             {"vec": dloc_probes[layer].conv.weight[right_idx].view(32), "locs": new_rs[j], "alpha": alpha},
@@ -489,4 +553,4 @@ if __name__ == "__main__":
             os.mkdir("./results")
         if not os.path.exists("./results/interv_results"):
             os.mkdir("./results/interv_results")
-        pd.DataFrame(results).to_csv(f"interv_results/agentinterv"+ ("" if not args.noshortrouteinterv else "_noshortrouteinterv") +f"_{args.model_name}_seed{seed}.csv")
+        pd.DataFrame(results).to_csv(f"./results/interv_results/agentinterv"+ ("" if not args.noshortrouteinterv else "_noshortrouteinterv") +f"_{args.model_name}_seed{seed}.csv")
