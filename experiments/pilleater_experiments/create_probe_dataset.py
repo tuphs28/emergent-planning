@@ -277,15 +277,12 @@ if __name__=="__main__":
     parser.add_argument('--only_solved', action='store_true')
     args = parser.parse_args()
 
-    if torch.cuda.is_available(): 
-        device = torch.device("cuda")
-    else: 
-        device = torch.device("cpu") 
+    device = torch.device("cpu") 
 
     env = thinker.make(
         f"gym_pilleater/PillEater-v0", 
         env_n=1, 
-        gpu= True if torch.cuda.is_available() else False,
+        gpu= False,
         wrapper_type=1, 
         has_model=False, 
         train_model=False, 
