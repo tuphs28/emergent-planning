@@ -77,99 +77,78 @@ def generate_aug_trans(episode_entry):
     agent_loc = trans["agent_loc"][0]
     agent_loc = ((agent_loc -(agent_loc % 13))//13, agent_loc % 13,)
     agent_y, agent_x = agent_loc
-    box_locs = [((box_loc -(box_loc % 13))//13, box_loc % 13) for box_loc in trans["tracked_box_loc"]]
     wall_locs = [((wall_loc-(wall_loc % 13))//13, wall_loc % 13) for wall_loc in trans["board_state"][0].view(-1).topk(k=(trans["board_state"][0]==1).to(int).sum()).indices]
-    if ((agent_y-1,agent_x) in box_locs) and trans["action"] == 1:
-        if agent_y > 1 and (agent_y-2,agent_x) not in wall_locs and (agent_y-2,agent_x) not in box_locs:
-            new_box_locs = [box_loc if box_loc!=(agent_y-1,agent_x) else (agent_y-2,agent_x) for box_loc in box_locs]
+    if trans["action"] == 1:
+        if agent_y > 1 and (agent_y-1,agent_x) not in wall_locs:
             new_agent_loc = (agent_y-1,agent_x)
         else:
             new_agent_loc = agent_loc
-            new_box_locs = box_locs
-    elif ((agent_y+1,agent_x) in box_locs) and trans["action"] == 2:
-        if agent_y < 6 and (agent_y+2,agent_x) not in wall_locs and (agent_y+2,agent_x) not in box_locs:
-            new_box_locs = [box_loc if box_loc!=(agent_y+1,agent_x) else (agent_y+2,agent_x) for box_loc in box_locs]
+    elif trans["action"] == 2:
+        if agent_y < 12 and (agent_y+1,agent_x) not in wall_locs:
             new_agent_loc = (agent_y+1,agent_x)
         else:
             new_agent_loc = agent_loc
-            new_box_locs = box_locs
-    elif ((agent_y,agent_x-1) in box_locs) and trans["action"] == 3:
-        if agent_x > 1  and (agent_y,agent_x-2) not in wall_locs and (agent_y,agent_x-2) not in box_locs:
-            new_box_locs = [box_loc if box_loc!=(agent_y,agent_x-1) else (agent_y,agent_x-2) for box_loc in box_locs]
+    elif trans["action"] == 3:
+        if agent_x > 1  and (agent_y,agent_x-1) not in wall_locs:
             new_agent_loc = (agent_y,agent_x-1)
         else:
-            new_box_locs = box_locs
             new_agent_loc = agent_loc
-    elif ((agent_y,agent_x+1) in box_locs) and trans["action"] == 4:
-        if agent_x < 6 and (agent_y,agent_x+2) not in wall_locs and (agent_y,agent_x+2) not in box_locs:
-            new_box_locs = [box_loc if box_loc!=(agent_y,agent_x+1) else ((agent_y,agent_x+2) if agent_x<6 else (agent_y,agent_x+1)) for box_loc in box_locs]
-            new_agent_loc = (agent_y,agent_x+1)
+    elif trans["action"] == 4:
+        if agent_x < 12 and (agent_y,agent_x+1) not in wall_locs:
+           new_agent_loc = (agent_y,agent_x+1)
         else:
-            new_box_locs = box_locs
             new_agent_loc = agent_loc
     else:
-        new_box_locs = box_locs
-        if trans["action"] == 1 and agent_y > 0:
-            new_agent_loc = (agent_y-1,agent_x)
-        elif trans["action"] == 2 and agent_y < 7:
-            new_agent_loc = (agent_y+1,agent_x)
-        elif trans["action"] == 3 and agent_x > 0:
-            new_agent_loc = (agent_y,agent_x-1)
-        elif trans["action"] == 4 and agent_y < 7:
-            new_agent_loc = (agent_y, agent_x+1)
-        else:
             new_agent_loc = agent_loc
-
-    new_box_locs = tuple([(13*y+x) for y,x in new_box_locs])
     new_agent_loc = tuple([13*new_agent_loc[0] + new_agent_loc[1]])
-    trans = {"tracked_box_loc": new_box_locs, "agent_loc": new_agent_loc, "action": 0}
+    trans = { "agent_loc": new_agent_loc, "action": 0}
     return trans
 
 def make_agent_info_extractor(ahead = 100) -> Callable:
     def agent_info_extractor(episode_entry: list) -> list:
         # track squares from which agent performs actions to leave
-        aug_episode_entry = episode_entry #+ [generate_aug_trans(episode_entry)]
+        aug_episode_entry = episode_entry + [generate_aug_trans(episode_entry)]
         for trans_idx, trans in enumerate(aug_episode_entry):
             board_locs = torch.zeros((13,13), dtype=int)
-            cur_level = trans["level"]
+            #cur_level = trans["level"]
             for loc_idx in range(169):
                 for future_trans_idx, future_trans in enumerate(aug_episode_entry[trans_idx:-1][:ahead]):
                     if loc_idx in future_trans["agent_loc"] and (future_trans["agent_loc"] != aug_episode_entry[trans_idx+future_trans_idx+1]["agent_loc"]): #NB: ignore no-ops and effective no-ops since want action we leave square with 
                         board_locs[(loc_idx-loc_idx%13)//13, loc_idx%13] = future_trans["action"]
                         break
-                    elif future_trans["level"] != cur_level:
-                        break
+                    #elif future_trans["level"] != cur_level:
+                        #break
             trans[f"agent_onto_with_{ahead}"] = board_locs
             new_board_locs = torch.zeros((13,13), dtype=int)
             new_board_locs[board_locs != 0 ] = 1
             trans[f"agent_from_{ahead}"] = new_board_locs
-        episode_entry = aug_episode_entry
+        episode_entry = aug_episode_entry[:-1]
         # track squares from which agent performs action to enter
-        aug_episode_entry = episode_entry #+ [generate_aug_trans(episode_entry)]
+        aug_episode_entry = episode_entry + [generate_aug_trans(episode_entry)]
         for trans_idx, trans in enumerate(aug_episode_entry):
             board_locs = torch.zeros((13,13), dtype=int)
-            cur_level = trans["level"]
+            #cur_level = trans["level"]
             for loc_idx in range(169):
                 for future_trans_idx, future_trans in enumerate(aug_episode_entry[trans_idx+1:][:ahead]):
                     if loc_idx in future_trans["agent_loc"] and aug_episode_entry[trans_idx+future_trans_idx]["agent_loc"] != future_trans["agent_loc"]:
                         board_locs[(loc_idx-loc_idx%13)//13, loc_idx%13] = aug_episode_entry[trans_idx+future_trans_idx]["action"]
                         break
-                    elif future_trans["level"] != cur_level:
-                        break
+                    #elif future_trans["level"] != cur_level:
+                        #break
             trans[f"agent_onto_after_{ahead}"] = board_locs
             new_board_locs = torch.zeros((13,13), dtype=int)
             new_board_locs[board_locs != 0 ] = 1
             trans[f"agent_onto_{ahead}"] = new_board_locs
-        episode_entry = aug_episode_entry
+        episode_entry = aug_episode_entry[:-1]
         for trans_idx, trans in enumerate(episode_entry):
             board_locs = torch.zeros((13,13), dtype=int)
-            cur_level = trans["level"]
+            #cur_level = trans["level"]
             for loc_idx in range(169):
                 for future_trans in episode_entry[trans_idx+1:][:ahead]:
                     if loc_idx in future_trans["agent_loc"]:
                         board_locs[(loc_idx-loc_idx%13)//13, loc_idx%13] += (1 if board_locs[(loc_idx-loc_idx%13)//13, loc_idx%13] <= 2 else 0)
-                    elif future_trans["level"] != cur_level:
-                        break
+                    #elif future_trans["level"] != cur_level:
+                        #break
             trans["agent_loc_count"] = board_locs
         return episode_entry
     return agent_info_extractor
@@ -217,7 +196,16 @@ def create_probing_data(net: DRCNet, env: Env, flags: NamedTuple, num_episodes: 
         state = {"real_states": torch.tensor(state).permute(2,0,1).unsqueeze(0)}
         episode_entry.append(trans_entry)
 
+        if episode_length > 1 and episode_entry[-1]["level"] != env.level:
+            #print(env.level, episode_entry[-1]["level"], len(episode_entry))
+            level_data = episode_entry
+            for fnc in future_feature_fncs:
+                episode_entry = fnc(level_data)
+            probing_data += level_data
+            episode_entry = []
+    
         if done:
+            #print("done", env.level, episode_entry[-1]["level"], len(episode_entry), episode_entry[-1].keys())
             for fnc in future_feature_fncs:
                 episode_entry = fnc(episode_entry)
             for trans_idx, trans_entry in enumerate(episode_entry):
@@ -228,7 +216,7 @@ def create_probing_data(net: DRCNet, env: Env, flags: NamedTuple, num_episodes: 
 
             episode_length = 0
             board_num += 1
-            print("Data collected from episode", board_num, "with episode length of", len(episode_entry))
+            #print("Data collected from episode", board_num, "with episode length of", len(episode_entry))
             episode_entry = []
             rnn_state = net.initial_state(batch_size=1, device=device)
             state = env.reset()
