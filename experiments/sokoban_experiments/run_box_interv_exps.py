@@ -278,6 +278,7 @@ if __name__ == "__main__":
                             ckp_path = os.path.join(util.full_path(ckp_path), f"ckp_actor_realstep{args.model_name}.tar")
                             ckp = torch.load(ckp_path, map_location=torch.device('cpu'))
                             net.load_state_dict(ckp["actor_net_state_dict"], strict=False)
+                            net.to(env.device)
                             net.eval()
                             
 
