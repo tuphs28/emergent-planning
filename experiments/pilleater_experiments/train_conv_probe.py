@@ -100,7 +100,7 @@ if __name__ == "__main__":
             train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True,persistent_workers=True)
             test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True,persistent_workers=True)
 
-            probe = ConvProbe(in_channels=7 if layer_name=="x" else 32, out_dim=out_dim, kernel_size=args.kernel, padding=(0 if args.kernel==1 else 1))
+            probe = ConvProbe(in_channels=14 if layer_name=="x" else 32, out_dim=out_dim, kernel_size=args.kernel, padding=(0 if args.kernel==1 else 1))
 
             probe.to(device)
             optimiser = torch.optim.AdamW(params=probe.parameters(), lr=1e-3, weight_decay=args.weight_decay)
