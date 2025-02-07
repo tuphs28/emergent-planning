@@ -460,7 +460,9 @@ class PillEaterEnv(gym.Env):
         self.image[:, :, PillEater.NOTFOOD] = self.world_state["notfood"]
 
         y_pillman, x_pillman = self.world_state["pillman"]["pos"]
-        self.image[y_pillman, x_pillman, PillEater.PILLMAN] = 1 
+        self.image[y_pillman, x_pillman, PillEater.PILLMAN] = 1
+        self.image[y_pillman, x_pillman, PillEater.NOTFOOD] = 0
+        self.image[y_pillman, x_pillman, PillEater.FOOD] = 0 
 
         if self.world_state["pills"]:
             pill_positions = np.array([pill["pos"] for pill in self.world_state["pills"]])
