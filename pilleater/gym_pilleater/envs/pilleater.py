@@ -159,7 +159,7 @@ class PillEaterEnv(gym.Env):
         self.pcontinue = self.discount
         self.reward = self.step_reward
         self.timer += 1
-        self.world_state["power"] = max(0, self.world_state["power"] - 1)
+        
         ghost_speed_modifier = 0.5 if self.world_state["power"] > 0 else 1
 
         # Move Pillman
@@ -184,6 +184,8 @@ class PillEaterEnv(gym.Env):
                     else:
                         self._kill_ghost(i)
                         break 
+                    
+        self.world_state["power"] = max(0, self.world_state["power"] - 1)
 
         # Check if move to next level or end
         if self.nfood == 0:
@@ -278,8 +280,18 @@ class PillEaterEnv(gym.Env):
 
     def _move_pillman(self, action):
         """Pillman performs the action."""
+        
+        
         pos = self.world_state["pillman"]["pos"]
         new_pos = self.map[pos[0], pos[1], action]
+        
+        # Check if moving to ghost position
+        for ghost in self.world_state["ghosts"]:
+            if np.array_equal(ghost["pos"], new_pos):
+                if self.world_state["power"] == 0:
+                    self._die_by_ghost()
+                    return self._make_image(), self.reward, True, {}
+        
         self.world_state["pillman"]["pos"] = new_pos
 
         y, x = new_pos
