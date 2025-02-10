@@ -71,6 +71,23 @@ def make_future_feature_detector(feature_name: str, mode: str, steps_ahead: Opti
         raise ValueError(f"User entered mode {mode}, valid modes are: ahead, traj, change")
     return feature_detector
 
+def make_trajectory_detector(steps_ahead: int, feature_name: str, inc_current: bool = False) -> Callable:
+
+    def get_future_trajectories(episode_entry: list) -> list:
+        virtual_ext = [{feature_name: episode_entry[-1][feature_name]}]
+        for trans_idx, trans in enumerate(episode_entry):
+            feature_locs_xy = []
+            for future_trans in (episode_entry+virtual_ext)[trans_idx+(1 if not inc_current else 0):trans_idx+steps_ahead+(2 if not inc_current else 1)]:
+                feature_locs_xy += [(future_trans[feature_name][feature_idx] % 13, (future_trans[feature_name][feature_idx]-(future_trans[feature_name][feature_idx]%13))//13) for feature_idx in range(len(future_trans[feature_name]))]
+            feature_locs_xy = torch.tensor(feature_locs_xy)
+            trajectory = torch.zeros(size=(13,13), dtype=torch.long)
+            if len(feature_locs_xy.shape) != 1:
+                trajectory[feature_locs_xy[:,1],feature_locs_xy[:,0]] = 1
+            trans[f"{feature_name}_{'future_trajectory' if steps_ahead!=0 else 'current'}_{steps_ahead}"] = trajectory
+        return episode_entry
+
+    return get_future_trajectories
+
 
 def generate_aug_trans(episode_entry):
     trans = episode_entry[-1]
@@ -347,6 +364,10 @@ if __name__=="__main__":
                         make_agent_info_extractor(ahead=32),
                         make_agent_info_extractor(ahead=24),
                         ]
+    
+    future_feature_fncs += [make_trajectory_detector(feature_name="ghost_loc", steps_ahead=i) for i in [3,6,16]]
+    future_feature_fncs += [make_trajectory_detector(feature_name="spooky_ghost_loc", steps_ahead=i) for i in [3,6,16]]
+    future_feature_fncs += [make_trajectory_detector(feature_name="nonspooky_ghost_loc", steps_ahead=i) for i in [3,6,16]]
 
     probing_data = create_probing_data(
                                         net=net,
