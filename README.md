@@ -1,9 +1,9 @@
 # Interpreting Emergent Planning in Model-Free Reinforcement Learning
 <img src="frontgif.gif" alt="front gif" style="width: 100%; display: block; margin: auto;"/>
 
-This is the official repo for the paper [*Interpreting Emergent Planning in Model-Free Reinforcement Learning*](https://openreview.net/forum?id=DzGe40glxs&referrer=%5BAuthor%20Console%5D). A blog post summarising this paper can be found [here](https://tuphs28.github.io/projects/interpplanning/). This repo builds on the [*Thinker*](https://github.com/stephen-chung-mh/thinker) repo associated with the paper [*Thinker: Learning to Plan and Act*](https://arxiv.org/abs/2307.14993).
+This is the official repo for the paper [*Interpreting Emergent Planning in Model-Free Reinforcement Learning*](https://openreview.net/forum?id=DzGe40glxs&referrer=%5BAuthor%20Console%5D). A blog post summarising this paper can be found [here](https://tuphs28.github.io/projects/interpplanning/). This repo builds on the [*Thinker*](https://github.com/stephen-chung-mh/thinker) repo associated with the paper [*Thinker: Learning to Plan and Act*](https://arxiv.org/abs/2307.14993). 
 
-Please note that we are still performing additional experiments regarding ResNet agents to add to the Appendix that are not currently included in this repo.
+
 
 ## Table of Contents
 - [Installation](#installation)
@@ -168,16 +168,18 @@ python3 train.py --xpid new_exp_id --drc true --name "Sokoban-v0" --actor_unroll
 
 To train this agent instead in Mini Pacman, replace `--name "Sokoban-v0"` with `--name "gym_pilleater/PillEater-v0"`. To instead train a ResNet agent, replace `--drc true` with `--resnet true`.
 
+
+## Related Repo
+If you wish to extend this paper, it may (depending on your research direction) be easier to use learned-planner repo found [here](https://github.com/AlignmentResearch/learned-planner) associated with the related paper [*Planning in a recurrent neural network that plays Sokoban*](https://arxiv.org/abs/2407.15421) that builds on our findings.
+
 ## Citation
 If using this paper or code, please cite us as follows:
 ```
 @inproceedings{
-anonymous2024interpreting,
+bush2025interpreting,
 title={Interpreting Emergent Planning in Model-Free Reinforcement Learning},
-author={Anonymous},
-booktitle={Submitted to The Thirteenth International Conference on Learning Representations},
-year={2024},
-url={https://openreview.net/forum?id=DzGe40glxs},
-note={under review}
+author={Thomas Bush and Stephen Chung and Usman Anwar and Adri{\`a} Garriga-Alonso and David Krueger},
+booktitle={The Thirteenth International Conference on Learning Representations},
+year={2025},
 }
 ```
