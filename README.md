@@ -3,8 +3,8 @@
 
 This is the official repo for the paper [*Interpreting Emergent Planning in Model-Free Reinforcement Learning*](https://openreview.net/forum?id=DzGe40glxs&referrer=%5BAuthor%20Console%5D). A blog post summarising this paper can be found [here](https://tuphs28.github.io/projects/interpplanning/). This repo builds on the [*Thinker*](https://github.com/stephen-chung-mh/thinker) repo associated with the paper [*Thinker: Learning to Plan and Act*](https://arxiv.org/abs/2307.14993). 
 
-## Related Repo
-If you wish to extend this paper, it may (depending on your research direction) be easier to use learned-planner repo found [here](https://github.com/AlignmentResearch/learned-planner) associated with the related paper [*Planning in a recurrent neural network that plays Sokoban*](https://arxiv.org/abs/2407.15421) that builds on our findings.
+## Related Repo - Please Read
+If you wish to extend this paper, it will likely be easier to use learned-planner repo found [here](https://github.com/AlignmentResearch/learned-planner) associated with the related paper [*Planning in a recurrent neural network that plays Sokoban*](https://arxiv.org/abs/2407.15421) that builds on our findings. 
 
 
 ## Table of Contents
